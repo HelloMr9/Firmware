@@ -263,9 +263,11 @@ MulticopterAttitudeControl::vehicle_status_poll()
 		if (_actuators_id == nullptr) {
 			if (_vehicle_status.is_vtol) {
 				_actuators_id = ORB_ID(actuator_controls_virtual_mc);
+				_attitude_sp_id = ORB_ID(mc_virtual_attitude_setpoint);
 
 			} else {
 				_actuators_id = ORB_ID(actuator_controls_0);
+				_attitude_sp_id = ORB_ID(vehicle_attitude_setpoint);
 			}
 		}
 	}
@@ -510,7 +512,9 @@ MulticopterAttitudeControl::generate_attitude_setpoint(float dt, bool reset_yaw_
 	_landing_gear.landing_gear = get_landing_gear_state();
 
 	attitude_setpoint.timestamp = landing_gear.timestamp = hrt_absolute_time();
-	orb_publish_auto(ORB_ID(vehicle_attitude_setpoint), &_vehicle_attitude_setpoint_pub, &attitude_setpoint, nullptr, ORB_PRIO_DEFAULT);
+	if (_attitude_sp_id != nullptr) {
+		orb_publish_auto(_attitude_sp_id, &_vehicle_attitude_setpoint_pub, &attitude_setpoint, nullptr, ORB_PRIO_DEFAULT);
+	}
 
 	_landing_gear.timestamp = hrt_absolute_time();
 	orb_publish_auto(ORB_ID(landing_gear), &_landing_gear_pub, &_landing_gear, nullptr, ORB_PRIO_DEFAULT);
@@ -869,7 +873,8 @@ MulticopterAttitudeControl::run()
 			if (attitude_updated) {
 				reset_yaw_sp = (!attitude_setpoint_generated && !_v_control_mode.flag_control_rattitude_enabled) ||
 						_vehicle_land_detected.landed ||
-						(_vehicle_status.is_vtol && !_vehicle_status.is_rotary_wing); // VTOL in FW mode
+						(_vehicle_status.is_vtol && _vehicle_status.in_transition_mode); // reset yaw setpoint during transitions, tailsitter.cpp generates
+																							// attitude setpoint for the transition
 				attitude_dt = 0.f;
 			}
 
